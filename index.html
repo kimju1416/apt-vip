@@ -564,7 +564,8 @@ const VRANK = { '들어갈 자리': 0, '소액 갭 자리': 1, '손대지 마': 
 const HQMODE = { go: '들어갈 자리', gap: '소액 갭 자리', no: '손대지 마' };
 const DIM = '#262C36', BLD_DEF = '#353D4A', BLD_Z = 14.4, CELL = 0.01;
 const HQ = { map: null, ready: false, mode: 'all', sel: null, raf: false, t0: 0, intro: true, tour: null, cells: new Map(), loading: new Set(), seq: 0, run: 0, wait: [], wide: () => innerWidth > 900 };
-const colH = v => Math.max(40, v / 100000 * 340);
+let COLREF = 100000;   // 지역마다 상위 10% 가격을 기준으로(강남 58억이 2km 탑이 되지 않게)
+const colH = v => Math.max(40, Math.min(700, v / COLREF * 460));
 
 function initMap() {
   if (HQ.map || !window.maplibregl) return;
@@ -641,6 +642,8 @@ function circle(lng, lat, r, n = 22) {
 function setHQData() {
   if (!HQ.ready || !S.data) return;
   const m = HQ.map, P = hqPts(), f = focusOf();
+  const meds = P.map(x => x.t.med12).sort((a, b) => a - b);
+  COLREF = meds.length ? meds[Math.floor(meds.length * 0.9)] : 100000;
   const topSet = new Set((HQ.mode === 'rb' ? P.filter(x => x.c.rb) : HQ.mode === 'val' ? P.filter(x => isVal(x.c, x.t)) : f ? P.filter(x => x.t.verdict === f) : P).slice().sort((a, b) => (VRANK[a.t.verdict] - VRANK[b.t.verdict]) || (b.t.med12 - a.t.med12)).slice(0, HQ.wide() ? 60 : 30).map(x => x.c.id));
   m.getSource('cx').setData({ type: 'FeatureCollection', features: P.map(({ c, t }) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
     properties: { cid: c.id, nm: c.nm, pl: eok(t.med12), c: HQ.mode === 'rb' ? RBCOL : HQ.mode === 'val' ? VALCOL : VCOL[t.verdict] || VCOL['판단 보류'], tc: ccolor(c, t) === DIM ? '#7C8597' : '#FFFFFF',
@@ -786,7 +789,10 @@ function renderCall() {
   const lc = d.market.listCount || [], lNow = lc.length ? lc[lc.length - 1][1] : d.src.listings, lOld = lc.length > 7 ? lc[Math.max(0, lc.length - 31)][1] : null;
   const vol = mon.slice(0, -2).map(m => m[1]), mx = Math.max(1, ...vol);
   const sp = `<svg class="spark" height="26" viewBox="0 0 150 26" preserveAspectRatio="none"><polyline fill="none" stroke="#F2C14E" stroke-width="1.6" vector-effect="non-scaling-stroke" points="${vol.map((v, i) => `${(i / Math.max(1, vol.length - 1) * 150).toFixed(1)},${(24 - v / mx * 22).toFixed(1)}`).join(' ')}"/></svg>`;
-  const head = vc == null ? `${esc(d.name.split(' ').pop())}, <em>${go}곳</em>이<br>바닥을 지났다.`
+  const md = a => { const v = a.filter(m => m[2]).map(m => m[2]); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+  const pc = md(l3) && md(p3) ? md(l3) / md(p3) - 1 : null;
+  const head = go === 0 ? (pc != null && pc > 0.03 ? `값은 이미 <em>${Math.round(pc * 100)}%</em> 올랐다.<br>지금 <em>들어갈 자리</em>는 없다.` : `${vc != null && vc < -0.05 ? `거래는 <em>${Math.round(-vc * 100)}%</em> 식었다.` : '아직 신호가 약하다.'}<br>지금 <em>들어갈 자리</em>는 없다.`)
+    : vc == null ? `${esc(d.name.split(' ').pop())}, <em>${go}곳</em>이<br>바닥을 지났다.`
     : vc < -0.05 ? `거래는 <em>${Math.round(-vc * 100)}%</em> 식었다.<br>그래도 <em>${go}곳</em>은 바닥을 지났다.`
     : vc > 0.05 ? `거래가 <em>${Math.round(vc * 100)}%</em> 살아났다.<br>들어갈 자리는 <em>${go}곳</em>.`
     : `거래는 제자리.<br>들어갈 자리는 <em>${go}곳</em>.`;
@@ -856,6 +862,15 @@ function supBlock(d) {
 function rankList() {
   const P = typesOf(S.b), v = focusOf();
   const byPeak = (a, b) => (a.t.fromPeak ?? 0) - (b.t.fromPeak ?? 0);
+  if (!v) {
+    const main = P.filter(x => x.t.verdict === '들어갈 자리').sort(byPeak).concat(P.filter(x => x.t.verdict === '소액 갭 자리').sort((a, b) => (a.t.gap ?? 1e12) - (b.t.gap ?? 1e12)));
+    if (main.length) return main;
+    // 들어갈 자리가 하나도 없을 때(강남처럼 이미 신고가): 입지 S·A인데 입지 대비 덜 오른 순
+    const fb = P.filter(x => x.t.verdict !== '손대지 마' && x.t.med12 && x.c.loc && ['S', 'A'].includes(x.c.loc.grade))
+      .sort((a, b) => (a.t.valGap ?? 0) - (b.t.valGap ?? 0) || b.c.loc.score - a.c.loc.score);
+    fb.fb = true;
+    return fb;
+  }
   return v ? P.filter(x => x.t.verdict === v).sort(v === '손대지 마' ? (a, b) => (b.t.n12 || 0) - (a.t.n12 || 0) : byPeak)
     : P.filter(x => x.t.verdict === '들어갈 자리').sort(byPeak).concat(P.filter(x => x.t.verdict === '소액 갭 자리').sort((a, b) => (a.t.gap ?? 1e12) - (b.t.gap ?? 1e12)));
 }
@@ -875,11 +890,11 @@ function renderRank() {
     html = L.map((l, i) => { const c = S.byId.get(l.c); return `<button class="item" data-id="${esc(l.c)}"><div class="n mono">${String(i + 1).padStart(2, '0')}</div><div style="min-width:0"><div class="nm">${esc(c?.nm)}</div><div class="rs">${l.fl ?? '?'}층/${l.tot ?? '?'} · ${esc(l.dir || '')} · 기대가 ${eok(l.exp)}${l.urg ? ' · 급매 표기' : ''}</div></div><div class="p num">${eok(l.p)}<small style="color:var(--pt)">${pct(l.disc)}</small></div></button>`; }).join('');
   } else {
     const v = focusOf(), list = rankList();
-    title = v || '지금 볼 단지';
-    sub = v === '손대지 마' ? '아직 빠지는 중이거나 매매가가 빠져 전세에 붙은 곳' : v === '소액 갭 자리' ? '전세가 매매를 밀어 올리는 중' : v ? '올해 돌아섰는데 전고점까지 많이 남은 순' : '들어갈 자리 → 소액 갭 자리';
+    title = list.fb ? '들어갈 자리 없음 — 대신 볼 곳' : v || '지금 볼 단지';
+    sub = list.fb ? '입지 S·A등급인데 입지 대비 덜 오른 순(추격 매수 주의)' : v === '손대지 마' ? '아직 빠지는 중이거나 매매가가 빠져 전세에 붙은 곳' : v === '소액 갭 자리' ? '전세가 매매를 밀어 올리는 중' : v ? '올해 돌아섰는데 전고점까지 많이 남은 순' : '들어갈 자리 → 소액 갭 자리';
     n = list.length;
     const mx = Math.max(.01, ...list.map(x => Math.abs(x.t.fromPeak || 0)));
-    html = list.slice(0, 40).map((x, i) => `<button class="item" data-id="${esc(x.c.id)}"><div class="n mono">${String(i + 1).padStart(2, '0')}</div><div style="min-width:0"><div class="nm">${esc(x.c.nm)}</div><div class="rs">1년 ${arrow(x.t.chg)}${x.t.ratio != null ? ' · 전세가율 ' + pct0(x.t.ratio) : ''} · ${x.c.by || '?'}년${x.c.hh ? ' · ' + Number(x.c.hh).toLocaleString() + '세대' : ''}</div><div class="bar"><i style="width:${(Math.abs(x.t.fromPeak || 0) / mx * 100).toFixed(0)}%;background:${VCSS[x.t.verdict]}"></i></div></div><div class="p num">${eok(x.t.med12)}<small>전고점 ${pct(x.t.fromPeak)}</small></div></button>`).join('');
+    html = list.slice(0, 40).map((x, i) => `<button class="item" data-id="${esc(x.c.id)}"><div class="n mono">${String(i + 1).padStart(2, '0')}</div><div style="min-width:0"><div class="nm">${esc(x.c.nm)}</div><div class="rs">1년 ${arrow(x.t.chg)}${x.t.ratio != null ? ' · 전세가율 ' + pct0(x.t.ratio) : ''} · ${x.c.by || '?'}년${x.c.hh ? ' · ' + Number(x.c.hh).toLocaleString() + '세대' : ''}</div><div class="bar"><i style="width:${(Math.abs(x.t.fromPeak || 0) / mx * 100).toFixed(0)}%;background:${VCSS[x.t.verdict]}"></i></div></div><div class="p num">${eok(x.t.med12)}<small>${list.fb ? '입지 ' + x.c.loc.grade + ' · 입지 대비 ' + pct(x.t.valGap) : '전고점 ' + pct(x.t.fromPeak)}</small></div></button>`).join('');
   }
   $('#rankT').textContent = title; $('#rankS').textContent = `${sub} · ${n}곳`;
   $('#rankL').innerHTML = html || '<div class="empty">조건에 맞는 곳이 없습니다.</div>';
