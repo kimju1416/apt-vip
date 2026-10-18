@@ -825,7 +825,7 @@ function tempBlock(d) {
     <ul>${T.parts.map(p => `<li><span>${esc(p.k)}</span><span>${esc(p.t)}</span></li>`).join('')}</ul></div>`;
 }
 const LOCK = ['station', 'job', 'school', 'elem', 'new', 'big', 'brand', 'shop', 'park', 'parking', 'flat', 'water', 'south', 'density', 'community', 'view', 'bay', 'royal', 'hojae'];
-const LOCL = { flat: '평지', big: '대단지', new: '신축', elem: '초품아', station: '역세권', job: '직주근접', school: '학군(학교 접근)', brand: '브랜드', shop: '상권', park: '공세권', water: '수세권', view: '조망(추정)', south: '남향·일조', royal: '로열층 매물', parking: '세대당 주차', community: '커뮤니티(추정)', bay: '판상형·4베이', density: '동간거리', hojae: '교통 호재' };
+const LOCL = { flat: '평지', big: '대단지', new: '신축', elem: '초품아', station: '역세권', job: '직주근접', school: '학군(학원가·전입)', brand: '브랜드', shop: '상권', park: '공세권', water: '수세권', view: '조망(추정)', south: '남향·일조', royal: '로열층 매물', parking: '세대당 주차', community: '커뮤니티(추정)', bay: '판상형·4베이', density: '동간거리', hojae: '교통 호재' };
 function locBox(c, t) {
   const L = c.loc; if (!L || L.score == null) return '';
   const f = L.f || {}, ks = LOCK.filter(k => f[k] && f[k].s != null);
@@ -841,7 +841,7 @@ function locTable(c) {
   return `<div style="margin-top:20px"><div class="sec-l">입지 ${LOCK.length}요소 · 점수 ${L.score != null ? Math.round(L.score) + '점(' + L.grade + ')' : '–'}</div><div class="card" style="padding:6px 12px"><table class="ltab">${LOCK.map(k => {
     const x = L.f[k]; if (!x) return `<tr><td>${LOCL[k]}</td><td class="muted">자료 없음</td><td class="sb"></td></tr>`;
     return `<tr><td>${LOCL[k]}</td><td>${esc(x.v)}${x.n ? `<span class="nt">${esc(x.n)}</span>` : ''}</td><td class="sb">${x.s != null ? `<i style="width:${x.s}%;background:${x.s >= 75 ? 'var(--go)' : x.s <= 30 ? 'var(--no)' : '#8A94A8'}"></i><span class="num muted" style="font-size:11px">${x.s}</span>` : ''}</td></tr>`;
-  }).join('')}</table></div><div class="cap">OSM·네이버 단지 정보·지형 자료로 잰 값입니다. 학업성취도·학원가·실제 조망·커뮤니티 시설 목록은 아직 반영하지 못했습니다.</div></div>`;
+  }).join('')}</table></div><div class="cap">OSM·네이버 단지 정보·지형·나이스 학원 정보·학교알리미 전·출입 자료로 잰 값입니다. 학업성취도(학교알리미 보안문자로 막힘)·실제 조망·커뮤니티 시설 목록은 반영하지 못했습니다.</div></div>`;
 }
 function supBlock(d) {
   const S2 = d.supply && d.supply.sido; if (!S2 || !S2.years) return '';
@@ -863,7 +863,7 @@ function renderRank() {
   let html, title, sub, n;
   if (HQ.mode === 'val') {
     const L = valList();
-    title = '입지 대비 싼 곳'; sub = '입지 B등급 이상인데 비슷한 입지·연식보다 8% 넘게 싼 순(학원가·학업성취도는 아직 미반영이라 학군지 밖이 싸게 보일 수 있음)'; n = L.length;
+    title = '입지 대비 싼 곳'; sub = '입지 B등급 이상인데 비슷한 입지·연식보다 8% 넘게 싼 순(학원가·중학교 전입 반영, 학업성취도는 미반영)'; n = L.length;
     html = L.slice(0, 40).map((x, i) => `<button class="item" data-id="${esc(x.c.id)}"><div class="n mono">${String(i + 1).padStart(2, '0')}</div><div style="min-width:0"><div class="nm">${esc(x.c.nm)} <span class="grade g-${x.c.loc.grade}" style="width:18px;height:18px;font-size:11px;border-radius:5px;vertical-align:1px">${x.c.loc.grade}</span></div><div class="rs">입지 ${Math.round(x.c.loc.score)}점 · ${esc(x.t.verdict)} · 1년 ${arrow(x.t.chg)}</div></div><div class="p num">${eok(x.t.med12)}<small style="color:#3DE0D0">입지 대비 ${pct(x.t.valGap)}</small></div></button>`).join('');
   } else if (HQ.mode === 'rb') {
     const L = rbList();
@@ -1382,7 +1382,7 @@ const SYS = `너는 한국 아파트 시장을 숫자로 읽는 직설형 투자
 9. 면책 문구는 쓰지 않는다(화면이 붙인다).
 10. 입주물량이 있으면 반드시 한 단락으로 다룬다. signal이 «공급 감소»면 앞으로 매매·전세에 우호적, «공급 많음»이면 전세가가 눌리고 역전세 위험이 커진다. next24·past36·ratio 숫자를 근거로 쓴다. 입주물량은 네이버에 등록된 100세대 이상 단지 기준이라 실제보다 적을 수 있다고 한 번 밝힌다.
 12. 입지는 입지점수·입지등급(구 안 상대 순위)·입지요소를 근거로 쓴다. 역세권·초품아·직주근접·학군·대단지·신축·브랜드처럼 값을 실제로 올리는 요소를 먼저 말하고, «추정»이라 적힌 요소(조망·커뮤니티)와 매물 설명에서 뽑은 요소(판상형·교통 호재)는 확인이 필요하다고 밝힌다. 입지대비가격이 −8% 이하면 «입지에 비해 싸다», +8% 이상이면 «입지에 비해 비싸다»고 단정한다.
-13. 시장온도·금리를 맨 앞 총평에 반영한다. 주담대 금리가 오르는 중이면 매수 타이밍을 서두르지 말라고, 내리는 중이면 거래가 살아날 수 있다고 쓴다. 학업성취도·학원가는 자료에 없으니 학군을 단정하지 않는다.
+13. 시장온도·금리를 맨 앞 총평에 반영한다. 주담대 금리가 오르는 중이면 매수 타이밍을 서두르지 말라고, 내리는 중이면 거래가 살아날 수 있다고 쓴다. 학군은 학원가(동 단위 추정)·가까운 중학교 전입·전출로 판단한다. 전입이 전출보다 많으면 학군 수요가 있다는 뜻이다. 학업성취도는 자료에 없으니 «명문 학군»이라고 단정하지 않는다.
 11. 재건축단계가 있는 단지는 연식으로 깎아 보지 말고 단계(추진위→안전진단→조합설립→사업시행인가→관리처분→이주·철거)와 분담금·사업 지연 위험을 말한다. 단계는 매물 설명에서 찾은 것이라 조합·구청 확인이 필요하다고 쓴다.
 
 출력 형식
