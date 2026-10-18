@@ -542,16 +542,13 @@ const colH = v => Math.max(40, v / 100000 * 340);
 
 function initMap() {
   if (HQ.map || !window.maplibregl) return;
-  const m = HQ.map = new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/dark', center: [127.9, 36.1], zoom: 2.4, pitch: 0, maxPitch: 80, attributionControl: { compact: true } });
+  const m = HQ.map = new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/dark', center: [127.8, 36.3], zoom: 6.6, pitch: 0, maxPitch: 80, attributionControl: { compact: true } });
   m.on('style.load', () => {
-    try { m.setProjection({ type: ['interpolate', ['linear'], ['zoom'], 4, 'vertical-perspective', 5.5, 'mercator'] }); } catch (_) {}
     if (m.getLayer('building')) m.removeLayer('building');
     const ly = m.getStyle().layers;
-    // 바탕: 낮은 확대는 세계 음영, 가까이는 브이월드 위성(어둡게 눌러 관제실 톤)
-    m.addSource('earth', { type: 'raster', tiles: ['https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 6, attribution: 'Natural Earth' });
+    // 바탕: 브이월드 위성(어둡게 눌러 관제실 톤)
     m.addSource('sat', { type: 'raster', tiles: [`https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Satellite/{z}/{y}/{x}.jpeg`], tileSize: 256, minzoom: 6, maxzoom: 18, bounds: [124, 33, 132, 39], attribution: '© 국토교통부 브이월드' });
     const after = ly[1] ? ly[1].id : undefined;
-    m.addLayer({ id: 'earth', type: 'raster', source: 'earth', maxzoom: 7, paint: { 'raster-opacity': ['interpolate', ['linear'], ['zoom'], 5.5, 0.9, 6.6, 0], 'raster-brightness-max': 0.55, 'raster-saturation': -0.4, 'raster-fade-duration': 0 } }, after);
     m.addLayer({ id: 'sat', type: 'raster', source: 'sat', minzoom: 6, paint: { 'raster-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0, 8, 1], 'raster-brightness-max': 0.5, 'raster-saturation': -0.45, 'raster-contrast': 0.12, 'raster-fade-duration': 150 } }, after);
     ly.forEach(l => {
       try {
@@ -634,9 +631,11 @@ function flyRegion() {
   const cam = HQ.map.cameraForBounds([[ln0, la0], [ln1, la1]], { padding: pad }) || { zoom: 13 };
   cam.center = [lnM, laM];
   const first = HQ.intro; HQ.intro = false;
-  HQ.t0 = performance.now() + (first ? 4200 : 500);
-  HQ.map.flyTo({ center: cam.center, zoom: cam.zoom + (wide ? .55 : .35), pitch: 62, bearing: -28, padding: pad, duration: first ? 6500 : 2800, curve: first ? 1.25 : 1.42, essential: true,
-    easing: first ? (t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2) : undefined });
+  const goal = { center: cam.center, zoom: cam.zoom + (wide ? .55 : .35), pitch: 62, bearing: -28, padding: pad };
+  HQ.t0 = performance.now() + 500;
+  // 처음엔 지역 바로 위에서 시작해 살짝 돌며 내려앉는다(지구본에서 내려오지 않는다)
+  if (first) { HQ.map.jumpTo({ ...goal, zoom: goal.zoom - 0.5, pitch: 48, bearing: -70 }); HQ.map.easeTo({ ...goal, duration: 2600, easing: t => 1 - Math.pow(1 - t, 3), essential: true }); }
+  else HQ.map.flyTo({ ...goal, duration: 2800, curve: 1.42, essential: true });
 }
 function startLoop() { if (!HQ.raf) { HQ.raf = true; requestAnimationFrame(hqTick); } }
 function hqTick(now) {
