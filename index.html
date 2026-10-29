@@ -595,6 +595,10 @@ async function initMap() {
     HQ.ready = true;
     if (S.data) { setHQData(); flyRegion(); }
     startLoop();
+    // 브이월드가 시작하며 카메라를 처음 자리(대한민국 전체)로 늦게 되돌리는 때가 있다 — 아직 높이 떠 있으면 다시 지역으로
+    [1500, 4000, 8000].forEach(ms => setTimeout(() => {
+      if (S.data && !HQ.tour && HQ.v.camera.positionCartographic.height > 100000) { HQ.intro = true; flyRegion(); }
+    }, ms));
   } catch (e) {
     console.error(e);
     toast('3D 지도를 불러오지 못했습니다. 새로고침해 보세요.');
