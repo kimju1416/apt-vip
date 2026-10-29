@@ -683,13 +683,13 @@ function setHQData() {
     // 표지: 이름·가격(상위는 멀리서도, 나머지는 가까이서만)
     const show = topSet.has(c.id) || sel || dealN[c.id];
     E.add({ _cid: c.id, position: Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 0),
-      point: { pixelSize: sel ? 14 : 9, color: C, outlineColor: Cesium.Color.fromCssColorString('#06080C'), outlineWidth: 2, heightReference: RG, disableDepthTestDistance: Number.POSITIVE_INFINITY, distanceDisplayCondition: new DDC(0, show ? 14000 : wide ? 2600 : 1000) },
+      point: { pixelSize: sel ? 14 : 9, color: C, outlineColor: Cesium.Color.fromCssColorString('#06080C'), outlineWidth: 2, heightReference: RG, disableDepthTestDistance: Number.POSITIVE_INFINITY, distanceDisplayCondition: new DDC(0, show ? 26000 : wide ? 2600 : 1000) },
       label: { text: `${c.nm}\n${eok(t.med12)}${HQ.mode === 'deal' && dealN[c.id] ? ` · 저평가 ${dealN[c.id]}` : ''}`, font: '600 14px "Pretendard Variable", "Malgun Gothic", sans-serif',
         fillColor: dim && !sel ? Cesium.Color.fromCssColorString('#A4ADBD') : Cesium.Color.WHITE, showBackground: true,
         backgroundColor: Cesium.Color.fromCssColorString(sel ? 'rgba(60,45,10,.88)' : 'rgba(6,8,12,.78)'), backgroundPadding: new Cesium.Cartesian2(9, 6),
         pixelOffset: new Cesium.Cartesian2(0, -22), verticalOrigin: Cesium.VerticalOrigin.BOTTOM, heightReference: RG,
         disableDepthTestDistance: Number.POSITIVE_INFINITY, scaleByDistance: new Cesium.NearFarScalar(900, 1, 12000, 0.72),
-        distanceDisplayCondition: new DDC(0, show ? 14000 : wide ? 2600 : 1000) } });
+        distanceDisplayCondition: new DDC(0, show ? 26000 : wide ? 2600 : 1000) } });
   }
   E.resumeEvents();
   updBeams();
@@ -726,7 +726,7 @@ function flyRegion() {
   const s = regionSphere(); if (!s) return;
   stopOrbit();
   const first = HQ.intro; HQ.intro = false;
-  const pd = HQ.wide() ? -36 : -42, rg = s.r * (HQ.wide() ? 2.25 : 3.1);
+  const pd = HQ.wide() ? -36 : -42, rg = s.r * (HQ.wide() ? 2.25 : 2.5);
   const off = new Cesium.HeadingPitchRange(rad(-25), rad(pd), rg);
   const bs = new Cesium.BoundingSphere(aim(s.lng, s.lat, 40, rad(-25), pd, rg, MOB_TILT.region), s.r);
   // 처음엔 지역 바로 위에서 시작해 살짝 돌며 내려앉는다(지구본에서 내려오지 않는다)
