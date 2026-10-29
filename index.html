@@ -497,13 +497,14 @@ async function loadRegion(lawd) {
   const meta = S.all.find(a => a.lawd === lawd);
   const hit = S.cache.get(lawd);
   if (hit && meta && hit.builtAt === meta.builtAt) { setData(hit); return; }
-  (S.tab === 'hq' ? $('#call') : $('#main')).innerHTML = '<div class="loading"><span class="spin"></span> 지역 자료를 받는 중 (3~5초)</div>';
+  (S.tab === 'hq' ? $('#call') : $('#main')).innerHTML = '<div class="loading"><span class="spin"></span> 지역 자료를 받는 중 (5~10초)</div>';
   try {
     const j = await api('getRegion', { lawd });
     if (S.lawd !== lawd) return;
     const d = await gunzipB64(j.gz);
     if (S.lawd !== lawd) return;
-    S.cache.clear(); S.cache.set(lawd, d);
+    S.cache.delete(lawd); S.cache.set(lawd, d);
+    while (S.cache.size > 3) S.cache.delete(S.cache.keys().next().value);   // 최근 3곳만 기억(돌아올 때 다시 안 받음)
     setData(d);
   } catch (err) {
     (S.tab === 'hq' ? $('#call') : $('#main')).innerHTML = `<div>자료를 받지 못했습니다. ${err.code === 'not_ready' ? '아직 준비 중인 지역입니다.' : '네트워크 확인 후 다시 시도하세요.'} <button class="btn btn-s" id="retry">다시 시도</button></div>`;
@@ -582,9 +583,14 @@ async function initMap() {
     if (!window.jQuery) await loadScript('https://code.jquery.com/jquery-3.7.1.min.js');
     // 브이월드 시작 스크립트는 document.write로 엔진 파일 셋을 붙인다 — 그 주소만 받아 차례로 불러온다(판 번호가 바뀌어도 따라감)
     const srcs = [], dw = document.write;
-    document.write = h => { const m = String(h).match(/src=\\?['"]([^'"\\]+)/); if (m) srcs.push(m[1]); };
-    try { await loadScript(`https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=${VW_KEY}`); } finally { document.write = dw; }
-    for (const s of srcs) await loadScript(s);
+    // 3D 엔진 셋만 받고, 그 엔진들이 뒤에 쓰는 2D 지도 부품(OpenLayers 등, 3D엔 안 씀)은 버린다 — 안 그러면 콘솔 경고 11건
+    let grab = true;
+    document.write = h => { const m = String(h).match(/src=\\?['"]([^'"\\]+)/); if (m && grab) srcs.push(m[1]); };
+    try {
+      await loadScript(`https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=${VW_KEY}`);
+      grab = false;
+      for (const s of srcs.slice()) await loadScript(s);
+    } finally { setTimeout(() => { document.write = dw; }, 4000); }
     await waitFor(() => window.vw && vw.Map, 15000);
     const m = new vw.Map();
     m.setOption({ mapId: 'map', initPosition: new vw.CameraPosition(new vw.CoordZ(127.9, 36.2, 520000), new vw.Direction(0, -90, 0)), logo: true, navigation: false });
@@ -1030,7 +1036,12 @@ function drawCxTable() {
     if (va == null && vb == null) return 0; if (va == null) return 1; if (vb == null) return -1;
     return (typeof va === 'string' ? va.localeCompare(vb, 'ko') : va - vb) * f.dir;
   });
-  $('#cxCnt').textContent = `${rows.length.toLocaleString()}개 단지 · 행을 누르면 상세`;
+  let hint = '';
+  if (q && !rows.length) {   // 지금 면적엔 없지만 다른 면적에 있는 단지를 알려 준다
+    const other = S.data.complexes.filter(c => (c.nm + ' ' + (c.dong || '')).includes(q) && !c.types[S.b]).slice(0, 3);
+    if (other.length) hint = ' · 이 면적엔 없음 — ' + other.map(c => `${c.nm}(${Object.keys(c.types).sort((a, b) => a - b).join('·')}㎡)`).join(', ');
+  }
+  $('#cxCnt').textContent = `${rows.length.toLocaleString()}개 단지 · 행을 누르면 상세${hint}`;
   $('#cxT thead').innerHTML = '<tr>' + CXCOLS.map(([k, l]) => `<th data-k="${k}">${l}${f.sort === k ? `<span class="arr">${f.dir > 0 ? '▲' : '▼'}</span>` : ''}</th>`).join('') + '</tr>';
   $('#cxT thead').onclick = e => { const th = e.target.closest('th'); if (!th) return; const k = th.dataset.k; if (f.sort === k) f.dir *= -1; else { f.sort = k; f.dir = k === 'nm' ? 1 : -1; } drawCxTable(); };
   $('#cxT tbody').innerHTML = rows.slice(0, 400).map(({ c, t }) => `<tr data-id="${esc(c.id)}">
