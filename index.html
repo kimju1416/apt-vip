@@ -366,10 +366,24 @@ const LAWD = [{"code":"11110","name":"서울특별시 종로구"},{"code":"11140
 <script type="module">
 const API = 'https://script.google.com/macros/s/AKfycbzV-qLS4hUEvTEubu314htF4QdTRpfMWWkI2xt0mWBUo0Hch97wl1Vp3P8ujqrOjwhRJg/exec';
 const SDK = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.131.0/+esm';
+const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models/';
+// p: 어느 회사 키를 쓰는지(g=Gemini, c=Claude) · in/out: 100만 토큰당 달러 · free: 무료 한도가 있는 모델
 const MODELS = {
-  'claude-opus-5-5': { name: 'Opus 5.5', note: '더 깊게 읽음', in: 4, out: 20 },
-  'claude-sonnet-5-5': { name: 'Sonnet 5.5', note: '절반 가격', in: 2, out: 10 },
+  'gemini-3.8-flash': { p: 'g', name: 'Gemini 3.8 Flash', note: '무료 키로 됨', in: 0.75, out: 3.75, free: true },
+  'gemini-3.5-flash-lite': { p: 'g', name: 'Gemini 3.5 Flash-Lite', note: '무료 키 · 가볍고 빠름', in: 0.3, out: 2.5, free: true },
+  'gemini-4-carbon': { p: 'g', name: 'Gemini 4 Carbon', note: '유료 키만 · 가장 깊게', in: 2, out: 10 },
+  'claude-opus-5-5': { p: 'c', name: 'Claude Opus 5.5', note: '유료 키만', in: 4, out: 20 },
+  'claude-sonnet-5-5': { p: 'c', name: 'Claude Sonnet 5.5', note: '유료 키만 · 절반 가격', in: 2, out: 10 },
 };
+const DEF_MODEL = 'gemini-3.8-flash';
+const PROV = {
+  g: { name: 'Gemini', store: 'av_gkey', ph: 'AIza...', ok: v => /^[\w-]{20,}$/.test(v) && !/^sk-ant-/.test(v), bad: 'Gemini API 키를 그대로 붙여 넣어 주세요.',
+    help: '키는 이 브라우저에만 저장되고 Google로만 바로 보냅니다. 아파트 레이더 서버로는 보내지 않습니다. 키는 <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener">aistudio.google.com</a>에서 무료로 만듭니다. 무료 키는 하루 횟수 한도가 있고, 보낸 내용이 Google 제품 개선에 쓰일 수 있습니다.' },
+  c: { name: 'Claude', store: 'av_key', ph: 'sk-ant-...', ok: v => /^sk-ant-/.test(v), bad: 'sk-ant- 로 시작하는 키를 넣어 주세요.',
+    help: '키는 이 브라우저에만 저장되고 Anthropic으로만 바로 보냅니다. 아파트 레이더 서버로는 보내지 않습니다. 요금은 키 주인의 Anthropic 계정에 청구됩니다(Claude 구독과 별개). 키는 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>에서 만듭니다.' },
+};
+const provOf = () => PROV[MODELS[S.rep.model].p];
+const repKey = () => store.get(provOf().store);
 const KRW = 1400;
 const BUCKETS = ['40', '49', '59', '74', '84', '99', '120', '140'];
 const VCLS = { '들어갈 자리': 'v-go', '소액 갭 자리': 'v-gap', '손대지 마': 'v-no', '지켜볼 자리': 'v-watch', '판단 보류': 'v-hold' };
@@ -395,7 +409,7 @@ const S = {
   cx: { q: '', v: '', age: '', big: false, sort: 'med12', dir: -1 },
   ls: { q: '', b: '', min: '', max: '', sig: false, urg: false, drop: false, gap: '', sort: 'disc', n: 50 },
   cmp: JSON.parse(store.get('av_cmp', '[]') || '[]'),
-  rep: { type: 'region', model: store.get('av_model', 'claude-opus-5-5'), busy: false, html: '', usage: null },
+  rep: { type: 'region', model: MODELS[store.get('av_model')] ? store.get('av_model') : DEF_MODEL, busy: false, html: '', usage: null },
 };
 
 /* ───── 공통 도우미 ───── */
@@ -1275,7 +1289,7 @@ function modal(title, body) {
 $('#menuBtn').onclick = () => {
   const close = modal('설정', `<div class="rows">
     <button class="row" id="mReg"><div class="main"><div class="t">관심 지역 관리</div><div class="s">${S.mine.length}/${S.limit}곳 등록 · 등록한 지역은 매일 새로 모읍니다</div></div></button>
-    <button class="row" id="mKey"><div class="main"><div class="t">Claude API 키</div><div class="s">${store.get('av_key') ? '이 브라우저에 저장됨' : '아직 없음 — AI 리포트에 필요'}</div></div></button>
+    <button class="row" id="mKey"><div class="main"><div class="t">AI 리포트 키 (${provOf().name})</div><div class="s">${repKey() ? '이 브라우저에 저장됨' : '아직 없음 — AI 리포트에 필요'}</div></div></button>
     <button class="row" id="mOut"><div class="main"><div class="t" style="color:var(--no)">나가기</div><div class="s">이 기기에서 입장 코드를 지웁니다</div></div></button></div>`);
   $('#mReg').onclick = () => { close(); openRegions(); };
   $('#mKey').onclick = () => { close(); S.tab = 'rep'; document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === 'rep')); render(); };
@@ -1321,15 +1335,14 @@ const REP_TYPES = {
   pick: { t: '매물 픽', d: '지금 필터에 걸린 매물 중 고를 것' },
 };
 function renderRep() {
-  const key = store.get('av_key');
-  const R = S.rep;
+  const R = S.rep, P = provOf(), key = repKey();
   $('#main').innerHTML = `<div class="stack">
-    <div><div class="head-row"><h2>AI 리포트</h2><span class="muted small">엔진이 계산한 숫자만 넘기고, Claude는 해석과 결론만 씁니다.</span></div>
+    <div><div class="head-row"><h2>AI 리포트</h2><span class="muted small">엔진이 계산한 숫자만 넘기고, AI는 해석과 결론만 씁니다.</span></div>
       <div class="card">
-        <div class="sec-l">Claude API 키</div>
+        <div class="sec-l">${P.name} API 키</div>
         ${key ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="num">${esc(key.slice(0, 10))}••••${esc(key.slice(-4))}</span><span class="muted small">이 브라우저에만 저장됨</span><button class="btn btn-s" id="keyDel">지우기</button></div>`
-        : `<div style="display:flex;gap:8px;flex-wrap:wrap"><input class="inp num" id="keyInp" type="password" placeholder="sk-ant-..." style="flex:1;min-width:220px" autocomplete="off"><button class="btn btn-p" id="keySave">저장</button></div>
-           <p class="muted small" style="margin:8px 0 0">키는 이 브라우저에만 저장되고 Anthropic으로만 바로 보냅니다. 아파트 레이더 서버로는 보내지 않습니다. 요금은 키 주인의 Anthropic 계정에 청구됩니다. 키는 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>에서 만듭니다.</p>`}
+        : `<div style="display:flex;gap:8px;flex-wrap:wrap"><input class="inp num" id="keyInp" type="password" placeholder="${P.ph}" style="flex:1;min-width:220px" autocomplete="off"><button class="btn btn-p" id="keySave">저장</button></div>
+           <p class="muted small" style="margin:8px 0 0">${P.help}</p>`}
       </div></div>
     ${S.data ? `<div>
       <div class="sec-l">무엇을 쓸까요</div>
@@ -1351,17 +1364,20 @@ function renderRep() {
   </div>`;
   if ($('#keySave')) $('#keySave').onclick = () => {
     const v = $('#keyInp').value.trim();
-    if (!/^sk-ant-/.test(v)) { toast('sk-ant- 로 시작하는 키를 넣어 주세요.'); return; }
-    store.set('av_key', v); renderRep();
+    if (!P.ok(v)) { toast(P.bad); return; }
+    store.set(P.store, v); renderRep();
   };
-  if ($('#keyDel')) $('#keyDel').onclick = () => { store.del('av_key'); renderRep(); };
+  if ($('#keyDel')) $('#keyDel').onclick = () => { store.del(P.store); renderRep(); };
   if (!S.data) return;
   $('#repType').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; R.type = b.dataset.k; renderRep(); };
   $('#repB').onchange = e => { S.b = e.target.value; store.set('av_b', S.b); updCost(); };
-  $('#repM').onchange = e => { R.model = e.target.value; store.set('av_model', R.model); updCost(); };
+  $('#repM').onchange = e => { R.model = e.target.value; store.set('av_model', R.model); renderRep(); };   // 회사가 바뀌면 키 칸도 바뀜
   $('#repGo').onclick = genReport;
   updCost();
-  if (R.html) showReport(R.html, true);
+  if (R.html) {
+    showReport(R.html, true);
+    if (R.meta && !R.busy) $('#repMeta').textContent = [R.meta.title, R.meta.model, R.meta.cost].filter(Boolean).join(' · ');   // 새로 열어도 무슨 리포트인지 보이게
+  }
 }
 function repPayload() {
   const d = S.data, b = S.b, R = S.rep;
@@ -1430,60 +1446,104 @@ function updCost() {
   const ok = R.type !== 'compare' || S.cmp.filter(id => S.byId.get(id)?.types[S.b]).length >= 2;
   const inT = estTokens(repPayload()), outT = 9000;
   const usd = inT / 1e6 * m.in + outT / 1e6 * m.out;
-  $('#repCost').textContent = `약 ${Math.round(usd * KRW / 10) * 10}원 ($${usd.toFixed(2)})`;
+  const wonTxt = `약 ${Math.round(usd * KRW / 10) * 10}원 ($${usd.toFixed(2)})`;
+  $('#repCost').textContent = m.free ? `무료 한도 안이면 0원 · 유료 키면 ${wonTxt}` : wonTxt;
   $('#repNote').textContent = ok ? `입력 약 ${(inT / 1000).toFixed(1)}천 토큰 · 출력 약 9천 토큰 가정 · ${m.name}` : '단지 비교는 이 평형에 실거래가 있는 단지를 2개 이상 담아야 합니다.';
-  $('#repGo').disabled = !ok || !store.get('av_key') || R.busy;
+  $('#repGo').disabled = !ok || !repKey() || R.busy;
+}
+/* Claude: 공식 SDK로 스트리밍. 돌려주는 값 { stop, inT, outT } */
+async function callClaude(key, model, content, onText) {
+  const { default: Anthropic } = await import(SDK);
+  const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+  let got = false;
+  const run = async fb => {
+    const body = { model, max_tokens: 32000, output_config: { effort: 'medium' }, system: SYS, messages: [{ role: 'user', content }] };
+    if (fb) Object.assign(body, { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
+    const stream = client.beta.messages.stream(body);
+    stream.on('text', t => { got = true; onText(t); });
+    return stream.finalMessage();
+  };
+  let msg;
+  try { msg = await run(true); }
+  catch (err) {
+    // 거절 대비 예비 모델 옵션이 막히면 그 옵션만 빼고 한 번 더
+    if (err.status === 400 && !got && /fallback|beta/i.test(String(err.message))) msg = await run(false);
+    else throw err;
+  }
+  const u = msg.usage || {};
+  return { stop: msg.stop_reason === 'refusal' ? 'refusal' : msg.stop_reason === 'max_tokens' ? 'max' : 'end', inT: u.input_tokens || 0, outT: u.output_tokens || 0 };
+}
+/* Gemini: REST 스트리밍(SSE). 키는 주소가 아니라 머리(x-goog-api-key)로 보낸다 */
+async function callGemini(key, model, content, onText) {
+  const r = await fetch(`${GEMINI}${model}:streamGenerateContent?alt=sse`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: SYS }] }, contents: [{ role: 'user', parts: [{ text: content }] }], generationConfig: { maxOutputTokens: 60000 } }),
+  });
+  if (!r.ok) {
+    let j = null; try { j = await r.json(); } catch (_) {}
+    const e = (Array.isArray(j) ? j[0] : j)?.error || {};
+    throw Object.assign(new Error(e.message || `HTTP ${r.status}`), { status: r.status, gstatus: e.status || '' });
+  }
+  let stop = '', block = '', u = {}, buf = '';
+  const eat = line => {
+    if (!line.startsWith('data:')) return;
+    let j; try { j = JSON.parse(line.slice(5)); } catch (_) { return; }
+    if (j.error) throw Object.assign(new Error(j.error.message || 'server'), { status: j.error.code, gstatus: j.error.status || '' });
+    if (j.promptFeedback?.blockReason) block = j.promptFeedback.blockReason;
+    if (j.usageMetadata) u = j.usageMetadata;
+    const c = j.candidates?.[0]; if (!c) return;
+    if (c.finishReason) stop = c.finishReason;
+    for (const p of c.content?.parts || []) if (p.text && !p.thought) onText(p.text);
+  };
+  const rd = r.body.pipeThrough(new TextDecoderStream()).getReader();
+  for (;;) {
+    const { value, done } = await rd.read();
+    if (value) { buf += value; const ls = buf.split(/\r?\n/); buf = ls.pop(); ls.forEach(eat); }
+    if (done) break;
+  }
+  if (buf) eat(buf);
+  const refused = block || ['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII'].includes(stop);
+  return { stop: refused ? 'refusal' : stop === 'MAX_TOKENS' ? 'max' : 'end', inT: u.promptTokenCount || 0, outT: (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0) };
 }
 async function genReport() {
-  const R = S.rep, key = store.get('av_key');
+  const R = S.rep, m = MODELS[R.model], P = PROV[m.p], key = repKey();
   if (!key || R.busy) return;
   R.busy = true; R.html = ''; $('#repErr').textContent = '';
   const btn = $('#repGo'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 쓰는 중';
   $('#repOut').classList.remove('hidden');
   const payload = repPayload();
   const title = `${S.data.name} · ${REP_TYPES[R.type].t} · ${blabel(S.b)}`;
-  R.meta = { title, model: MODELS[R.model].name, at: S.data.builtAt };
+  R.meta = { title, model: m.name, at: S.data.builtAt };
   ($('#repMeta') || {}).textContent = `${title} · ${R.meta.model}`;
   let last = 0;
   try {
-    const { default: Anthropic } = await import(SDK);
-    const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
     const content = `아래는 엔진이 계산한 «${REP_TYPES[R.type].t}» 자료다. 규칙대로 리포트를 써라.
 
 ${JSON.stringify(payload)}`;
-    const run = async fb => {
-      const body = { model: R.model, max_tokens: 32000, output_config: { effort: 'medium' }, system: SYS, messages: [{ role: 'user', content }] };
-      if (fb) Object.assign(body, { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
-      const stream = client.beta.messages.stream(body);
-      stream.on('text', t => {
-        R.html += t;
-        if (Date.now() - last > 600) { last = Date.now(); showReport(R.html); }
-      });
-      return stream.finalMessage();
+    const onText = t => {
+      R.html += t;
+      if (Date.now() - last > 600) { last = Date.now(); showReport(R.html); }
     };
-    let msg;
-    try { msg = await run(true); }
-    catch (err) {
-      // 거절 대비 예비 모델 옵션이 막히면 그 옵션만 빼고 한 번 더
-      if (err.status === 400 && !R.html && /fallback|beta/i.test(String(err.message))) msg = await run(false);
-      else throw err;
-    }
-    if (msg.stop_reason === 'refusal') throw Object.assign(new Error('refusal'), { code: 'refusal' });
-    R.usage = msg.usage;
-    const u = msg.usage, m = MODELS[R.model];
-    const usd = (u.input_tokens || 0) / 1e6 * m.in + (u.output_tokens || 0) / 1e6 * m.out;
-    R.meta.cost = `실제 약 ${Math.round(usd * KRW / 10) * 10}원`;
+    const res = await (m.p === 'g' ? callGemini : callClaude)(key, R.model, content, onText);
+    if (res.stop === 'refusal') throw Object.assign(new Error('refusal'), { code: 'refusal' });
+    if (!R.html.trim()) throw new Error('빈 답이 왔습니다. 다시 시도하세요.');
+    R.usage = res;
+    const usd = res.inT / 1e6 * m.in + res.outT / 1e6 * m.out;
+    const wonTxt = `약 ${Math.round(usd * KRW / 10) * 10}원`;
+    R.meta.cost = m.free ? `유료 키였다면 ${wonTxt}` : `실제 ${wonTxt}`;
     try { store.set('av_lastrep', JSON.stringify({ html: R.html, meta: R.meta })); } catch (_) {}
-    ($('#repMeta') || {}).textContent = `${title} · ${R.meta.model} · ${R.meta.cost}${msg.stop_reason === 'max_tokens' ? ' · 길이 한도에서 잘림' : ''}`;
+    ($('#repMeta') || {}).textContent = `${title} · ${R.meta.model} · ${R.meta.cost}${res.stop === 'max' ? ' · 길이 한도에서 잘림' : ''}`;
     showReport(R.html, true);
   } catch (err) {
-    const s = err.status;
-    ($('#repErr') || {}).textContent = err.code === 'refusal' ? 'Claude가 이 요청을 거절했습니다. 다른 종류로 다시 시도하세요.'
-      : s === 401 ? 'API 키가 맞지 않습니다. 키를 다시 확인하세요.'
-      : s === 429 ? '요청이 몰렸습니다. 1분 뒤 다시 시도하세요.'
-      : s === 400 && /credit|balance/i.test(err.message) ? 'Anthropic 계정 크레딧이 부족합니다.'
-      : s >= 500 ? 'Anthropic 서버가 잠시 응답하지 않습니다. 잠시 뒤 다시 시도하세요.'
-      : '리포트를 만들지 못했습니다: ' + String(err.message || err).slice(0, 160);
+    const s = err.status, g = m.p === 'g', msg = String(err.message || err);
+    ($('#repErr') || {}).textContent = err.code === 'refusal' ? `${P.name}가 이 요청을 거절했습니다. 다른 종류나 다른 모델로 다시 시도하세요.`
+      : s === 401 || (g && (s === 403 || (s === 400 && /api key/i.test(msg)))) ? 'API 키가 맞지 않습니다. 키를 다시 확인하세요.'
+      : s === 429 ? (g ? '무료 한도를 다 썼거나 요청이 몰렸습니다. 1분 뒤 다시 시도하거나 더 가벼운 모델을 고르세요. 하루 한도라면 내일 풀립니다.' : '요청이 몰렸습니다. 1분 뒤 다시 시도하세요.')
+      : g && s === 404 ? '이 모델을 이 키로 쓸 수 없습니다. 다른 모델을 고르세요.'
+      : !g && s === 400 && /credit|balance/i.test(msg) ? 'Anthropic 계정 크레딧이 부족합니다.'
+      : s >= 500 ? `${g ? 'Google' : 'Anthropic'} 서버가 잠시 응답하지 않습니다. 잠시 뒤 다시 시도하세요.`
+      : '리포트를 만들지 못했습니다: ' + msg.slice(0, 160);
+    if (R.html) showReport(R.html, true);   // 받다가 끊겨도 받은 데까지는 보여 줌
   } finally {
     R.busy = false; btn.innerHTML = '리포트 만들기'; updCost();
   }
